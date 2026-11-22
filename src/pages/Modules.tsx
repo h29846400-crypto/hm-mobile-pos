@@ -34,6 +34,7 @@ function downloadCsv(name: string, rows: string[][]) {
 // ---------- STOCK ----------
 export function StockPage({ data, role, refresh }: { data: AllData; role: Role; refresh: () => void }) {
   const [q, setQ] = useState('')
+  const [catFilter, setCatFilter] = useState('all')
   const [name, setName] = useState(''), [sku, setSku] = useState(''), [cat, setCat] = useState('')
   const [cost, setCost] = useState(''), [profit, setProfit] = useState('30'), [qty, setQty] = useState('1')
   const [msg, setMsg] = useState(''), [busy, setBusy] = useState(false)
@@ -42,7 +43,9 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
   const [ePrice, setEPrice] = useState(''), [eMin, setEMin] = useState('5')
   const salePrice = cost ? Math.round(Number(cost) * (1 + Number(profit || 0) / 100) * 100) / 100 : 0
   const searchable = (p: any) => [p.name, p.sku, p.barcode ?? '', p.brand ?? '', ((p as any).compatible_models ?? []).join(' ')].join(' ').toLowerCase()
-  const filtered = data.products.filter(p => p.status !== 'inactive' && searchable(p).includes(q.toLowerCase()))
+  const filtered = data.products.filter(p => p.status !== 'inactive' && (catFilter === 'all' || p.category_id === catFilter) && searchable(p).includes(q.toLowerCase()))
+  const filteredQty = filtered.reduce((s, p) => s + Number(p.quantity), 0)
+  const filteredValue = filtered.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)
   const activeProducts = data.products.filter(p => p.status !== 'inactive')
   const totalValue = activeProducts.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)
   const submit = async (e: React.FormEvent) => {
@@ -96,6 +99,11 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
         {msg && <div className="text-sm">{msg}</div>}
       </form>
       <input className={inputCls} placeholder="Search stock by name / SKU / barcode…" value={q} onChange={e => setQ(e.target.value)} />
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => setCatFilter('all')} className={`border rounded px-3 py-1 text-sm ${catFilter === 'all' ? 'bg-teal-700 text-white' : ''}`}>All ({activeProducts.length} products · {activeProducts.reduce((s, p) => s + Number(p.quantity), 0)} pcs)</button>
+        {data.categories.filter(c => activeProducts.some(p => p.category_id === c.id)).map(c => { const n = activeProducts.filter(p => p.category_id === c.id); const qty = n.reduce((s, p) => s + Number(p.quantity), 0); return <button key={c.id} onClick={() => setCatFilter(c.id)} className={`border rounded px-3 py-1 text-sm ${catFilter === c.id ? 'bg-teal-700 text-white' : ''}`}>{c.name} ({n.length} · {qty} pcs)</button> })}
+      </div>
+      <div className="text-sm">Showing <b>{filtered.length}</b> products · Total qty <b>{filteredQty}</b> pcs · Stock value <b>{fmt(filteredValue)}</b></div>
       <div className={cardCls}>
         <table className="w-full text-sm"><thead><tr><th className={thCls}>Product</th><th className={thCls}>Category</th><th className={thCls}>Sale Price</th>{role === 'admin' && <th className={thCls}>Cost</th>}<th className={thCls}>Qty</th><th className={thCls}></th></tr></thead>
           <tbody>{filtered.map(p => editId === p.id ? (
