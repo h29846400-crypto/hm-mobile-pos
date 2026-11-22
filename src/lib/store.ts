@@ -74,6 +74,40 @@ export async function adjustStock(productId: string, delta: number, reason: stri
   return after
 }
 
+/** Edit a product's name, brand, category, sale price and low-stock level. Cost is never changed here. */
+export async function updateProduct(input: { id: string; name: string; brand?: string; categoryId: string | null; sellingPrice: number; minStock: number }) {
+  const { error } = await supabase.from('products').update({
+    name: input.name, brand: input.brand || null, category_id: input.categoryId,
+    selling_price: input.sellingPrice, wholesale_price: input.sellingPrice,
+    min_stock: input.minStock, updated_at: new Date().toISOString(),
+  }).eq('id', input.id)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Delete a product. If it has any sale, purchase, repair-part or serial history it is
+ * deactivated instead (status='inactive') so old invoices and reports stay correct.
+ * Returns 'deleted' or 'deactivated'.
+ */
+export async function deleteProduct(productId: string): Promise<'deleted' | 'deactivated'> {
+  const checks = await Promise.all([
+    supabase.from('sale_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    supabase.from('purchase_items').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    supabase.from('repair_parts').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+    supabase.from('product_serials').select('id', { count: 'exact', head: true }).eq('product_id', productId),
+  ])
+  const linked = checks.reduce((s, r) => s + (r.count ?? 0), 0)
+  if (linked === 0) {
+    await supabase.from('stock_movements').delete().eq('product_id', productId)
+    const { error } = await supabase.from('products').delete().eq('id', productId)
+    if (error) throw new Error(error.message)
+    return 'deleted'
+  }
+  const { error } = await supabase.from('products').update({ status: 'inactive', updated_at: new Date().toISOString() }).eq('id', productId)
+  if (error) throw new Error(error.message)
+  return 'deactivated'
+}
+
 export interface CartLine { product: Product; qty: number; price: number; lineDiscount: number }
 
 /** Complete a POS sale: stock decreases, sale + items, cashbook in for paid amount. */
