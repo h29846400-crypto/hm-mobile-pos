@@ -91,14 +91,15 @@ export default function App() {
     const salesTotal = sales.reduce((s, x) => s + Number(x.grand_total), 0)
     const purchTotal = purchases.reduce((s, x) => s + Number(x.grand_total), 0)
     const expTotal = expenses.reduce((s, x) => s + Number(x.amount), 0)
+    const active = data.products.filter(p => p.status !== 'inactive')
     return {
       salesTotal, purchTotal, expTotal, gross: salesTotal - cogs,
       net: salesTotal - cogs - expTotal, salesCount: sales.length,
-      invValue: data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0),
-      invCost: data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.avg_cost), 0),
-      totalProducts: data.products.length,
-      lowStock: data.products.filter(p => Number(p.quantity) <= Number(p.min_stock) && Number(p.quantity) > 0).length,
-      outStock: data.products.filter(p => Number(p.quantity) <= 0).length,
+      invValue: active.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0),
+      invCost: active.reduce((s, p) => s + Number(p.quantity) * Number(p.avg_cost), 0),
+      totalProducts: active.length,
+      lowStock: active.filter(p => Number(p.quantity) <= Number(p.min_stock) && Number(p.quantity) > 0).length,
+      outStock: active.filter(p => Number(p.quantity) <= 0).length,
       customers: data.customers.length,
       custOut: data.customers.reduce((s, c) => s + Number(c.opening_balance), 0),
       suppOut: data.suppliers.reduce((s, x) => s + Number(x.opening_balance), 0),
@@ -112,7 +113,7 @@ export default function App() {
     if (!data || query.trim().length < 2) return null
     const q = query.trim().toLowerCase()
     return {
-      products: data.products.filter(p => [p.name, p.sku, p.barcode ?? ''].join(' ').toLowerCase().includes(q)).slice(0, 8),
+      products: data.products.filter(p => p.status !== 'inactive' && [p.name, p.sku, p.barcode ?? '', p.brand ?? '', ((p as any).compatible_models ?? []).join(' ')].join(' ').toLowerCase().includes(q)).slice(0, 8),
       customers: data.customers.filter(c => [c.name, c.phone].join(' ').toLowerCase().includes(q)).slice(0, 5),
       suppliers: data.suppliers.filter(s => [s.name, s.phone].join(' ').toLowerCase().includes(q)).slice(0, 5),
       sales: data.sales.filter(s => s.invoice_no.toLowerCase().includes(q)).slice(0, 5),
