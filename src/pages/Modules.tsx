@@ -97,17 +97,18 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
       </form>
       <input className={inputCls} placeholder="Search stock by name / SKU / barcode…" value={q} onChange={e => setQ(e.target.value)} />
       <div className={cardCls}>
-        <table className="w-full text-sm"><thead><tr><th className={thCls}>Product</th><th className={thCls}>Category</th><th className={thCls}>Sale Price</th><th className={thCls}>Qty</th><th className={thCls}></th></tr></thead>
+        <table className="w-full text-sm"><thead><tr><th className={thCls}>Product</th><th className={thCls}>Category</th><th className={thCls}>Sale Price</th>{role === 'admin' && <th className={thCls}>Cost</th>}<th className={thCls}>Qty</th><th className={thCls}></th></tr></thead>
           <tbody>{filtered.map(p => editId === p.id ? (
             <tr key={p.id} className="border-b bg-yellow-50 dark:bg-gray-700">
               <td className="py-2 px-2"><input className={inputCls} value={eName} onChange={e => setEName(e.target.value)} placeholder="Product name" /><input className={`${inputCls} mt-1`} value={eBrand} onChange={e => setEBrand(e.target.value)} placeholder="Brand (optional)" /></td>
               <td className="px-2"><select className={inputCls} value={eCat} onChange={e => setECat(e.target.value)}><option value="">Category…</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
               <td className="px-2"><input className={inputCls} type="number" min="0" step="0.01" value={ePrice} onChange={e => setEPrice(e.target.value)} placeholder="Sale price" /></td>
+              {role === 'admin' && <td className="px-2 text-gray-500">{fmt(p.avg_cost)}</td>}
               <td className="px-2"><input className={inputCls} type="number" min="0" value={eMin} onChange={e => setEMin(e.target.value)} placeholder="Low stock at" /></td>
               <td className="px-2 whitespace-nowrap"><button onClick={saveEdit} disabled={busy} className="border rounded px-2 mr-1 bg-teal-700 text-white">Save</button><button onClick={() => setEditId(null)} className="border rounded px-2">Cancel</button></td>
             </tr>
           ) : (
-            <tr key={p.id} className="border-b"><td className="py-2 px-2">{p.name}<div className="text-xs text-gray-500">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div></td><td className="px-2">{catName(data, p.category_id)}</td><td className="px-2 font-semibold">{fmt(p.selling_price)}</td><td className="px-2">{Number(p.quantity)}</td><td className="px-2 whitespace-nowrap"><button onClick={() => adjust(p, 1)} className="border rounded px-2 mr-1">+1</button><button onClick={() => adjust(p, -1)} className="border rounded px-2 mr-1">−1</button>{role === 'admin' && <><button onClick={() => startEdit(p)} className="border rounded px-2 mr-1">Edit</button><button onClick={() => removeProduct(p)} className="border rounded px-2 text-red-600">Delete</button></>}</td></tr>
+            <tr key={p.id} className="border-b"><td className="py-2 px-2">{p.name}<div className="text-xs text-gray-500">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div></td><td className="px-2">{catName(data, p.category_id)}</td><td className="px-2 font-semibold">{fmt(p.selling_price)}</td>{role === 'admin' && <td className="px-2">{fmt(p.avg_cost)}</td>}<td className="px-2">{Number(p.quantity)}</td><td className="px-2 whitespace-nowrap"><button onClick={() => adjust(p, 1)} className="border rounded px-2 mr-1">+1</button><button onClick={() => adjust(p, -1)} className="border rounded px-2 mr-1">−1</button>{role === 'admin' && <><button onClick={() => startEdit(p)} className="border rounded px-2 mr-1">Edit</button><button onClick={() => removeProduct(p)} className="border rounded px-2 text-red-600">Delete</button></>}</td></tr>
           ))}</tbody></table>
         {filtered.length === 0 && <div className="text-sm text-gray-500 py-2">No products found.</div>}
       </div>
