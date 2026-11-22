@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { supabase, SHOP, fmt, todayPK, uid, type Role } from '../lib/supabase'
-import { addStock, adjustStock, completeSale, createSaleReturn, savePurchase, saveRepair, recordPayment, addExpense, fetchAll, catName, prodName, type AllData, type CartLine } from '../lib/store'
+import { addStock, adjustStock, updateProduct, deleteProduct, completeSale, createSaleReturn, savePurchase, saveRepair, recordPayment, addExpense, fetchAll, catName, prodName, type AllData, type CartLine } from '../lib/store'
 
 const inputCls = 'border rounded-lg px-3 py-2 bg-white dark:bg-gray-800 w-full'
 const btnCls = 'bg-teal-700 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-50'
@@ -37,8 +37,12 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
   const [name, setName] = useState(''), [sku, setSku] = useState(''), [cat, setCat] = useState('')
   const [cost, setCost] = useState(''), [profit, setProfit] = useState('30'), [qty, setQty] = useState('1')
   const [msg, setMsg] = useState(''), [busy, setBusy] = useState(false)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [eName, setEName] = useState(''), [eBrand, setEBrand] = useState(''), [eCat, setECat] = useState('')
+  const [ePrice, setEPrice] = useState(''), [eMin, setEMin] = useState('5')
   const salePrice = cost ? Math.round(Number(cost) * (1 + Number(profit || 0) / 100) * 100) / 100 : 0
-  const filtered = data.products.filter(p => [p.name, p.sku, p.barcode ?? ''].join(' ').toLowerCase().includes(q.toLowerCase()))
+  const searchable = (p: any) => [p.name, p.sku, p.barcode ?? '', p.brand ?? '', ((p as any).compatible_models ?? []).join(' ')].join(' ').toLowerCase()
+  const filtered = data.products.filter(p => p.status !== 'inactive' && searchable(p).includes(q.toLowerCase()))
   const totalValue = data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg('')
@@ -47,6 +51,27 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
   }
   const adjust = async (p: any, delta: number) => {
     try { await adjustStock(p.id, delta, 'manual', role === 'admin'); await refresh() } catch (err: any) { alert(err.message) }
+  }
+  const startEdit = (p: any) => {
+    setEditId(p.id); setEName(p.name); setEBrand(p.brand ?? ''); setECat(p.category_id ?? '')
+    setEPrice(String(p.selling_price)); setEMin(String(p.min_stock ?? 5))
+  }
+  const saveEdit = async () => {
+    if (!editId || !eName.trim() || Number(ePrice) < 0) { setMsg('Please enter a valid name and sale price.'); return }
+    setBusy(true); setMsg('')
+    try {
+      await updateProduct({ id: editId, name: eName.trim(), brand: eBrand.trim(), categoryId: eCat || null, sellingPrice: Number(ePrice), minStock: Number(eMin) || 0 })
+      setMsg('Product updated.'); setEditId(null); await refresh()
+    } catch (err: any) { setMsg('Error: ' + err.message) } finally { setBusy(false) }
+  }
+  const removeProduct = async (p: any) => {
+    if (!window.confirm(`Delete "${p.name}"?\n\nIf this product has any sale, purchase or repair history, it will be hidden instead of deleted so old invoices stay correct.`)) return
+    setBusy(true); setMsg('')
+    try {
+      const res = await deleteProduct(p.id)
+      setMsg(res === 'deleted' ? `"${p.name}" deleted.` : `"${p.name}" has history, so it was hidden (deactivated) instead of deleted.`)
+      await refresh()
+    } catch (err: any) { setMsg('Error: ' + err.message) } finally { setBusy(false) }
   }
   return (
     <div className="space-y-4">
@@ -72,7 +97,17 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
       <input className={inputCls} placeholder="Search stock by name / SKU / barcode…" value={q} onChange={e => setQ(e.target.value)} />
       <div className={cardCls}>
         <table className="w-full text-sm"><thead><tr><th className={thCls}>Product</th><th className={thCls}>Category</th><th className={thCls}>Sale Price</th><th className={thCls}>Qty</th><th className={thCls}></th></tr></thead>
-          <tbody>{filtered.map(p => <tr key={p.id} className="border-b"><td className="py-2 px-2">{p.name}<div className="text-xs text-gray-500">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div></td><td className="px-2">{catName(data, p.category_id)}</td><td className="px-2 font-semibold">{fmt(p.selling_price)}</td><td className="px-2">{Number(p.quantity)}</td><td className="px-2 whitespace-nowrap"><button onClick={() => adjust(p, 1)} className="border rounded px-2 mr-1">+1</button><button onClick={() => adjust(p, -1)} className="border rounded px-2">−1</button></td></tr>)}</tbody></table>
+          <tbody>{filtered.map(p => editId === p.id ? (
+            <tr key={p.id} className="border-b bg-yellow-50 dark:bg-gray-700">
+              <td className="py-2 px-2"><input className={inputCls} value={eName} onChange={e => setEName(e.target.value)} placeholder="Product name" /><input className={`${inputCls} mt-1`} value={eBrand} onChange={e => setEBrand(e.target.value)} placeholder="Brand (optional)" /></td>
+              <td className="px-2"><select className={inputCls} value={eCat} onChange={e => setECat(e.target.value)}><option value="">Category…</option>{data.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></td>
+              <td className="px-2"><input className={inputCls} type="number" min="0" step="0.01" value={ePrice} onChange={e => setEPrice(e.target.value)} placeholder="Sale price" /></td>
+              <td className="px-2"><input className={inputCls} type="number" min="0" value={eMin} onChange={e => setEMin(e.target.value)} placeholder="Low stock at" /></td>
+              <td className="px-2 whitespace-nowrap"><button onClick={saveEdit} disabled={busy} className="border rounded px-2 mr-1 bg-teal-700 text-white">Save</button><button onClick={() => setEditId(null)} className="border rounded px-2">Cancel</button></td>
+            </tr>
+          ) : (
+            <tr key={p.id} className="border-b"><td className="py-2 px-2">{p.name}<div className="text-xs text-gray-500">{p.sku}{p.barcode ? ` · ${p.barcode}` : ''}</div></td><td className="px-2">{catName(data, p.category_id)}</td><td className="px-2 font-semibold">{fmt(p.selling_price)}</td><td className="px-2">{Number(p.quantity)}</td><td className="px-2 whitespace-nowrap"><button onClick={() => adjust(p, 1)} className="border rounded px-2 mr-1">+1</button><button onClick={() => adjust(p, -1)} className="border rounded px-2 mr-1">−1</button>{role === 'admin' && <><button onClick={() => startEdit(p)} className="border rounded px-2 mr-1">Edit</button><button onClick={() => removeProduct(p)} className="border rounded px-2 text-red-600">Delete</button></>}</td></tr>
+          ))}</tbody></table>
         {filtered.length === 0 && <div className="text-sm text-gray-500 py-2">No products found.</div>}
       </div>
       <div className={cardCls}>
@@ -96,7 +131,7 @@ export function POSPage({ data, role, refresh }: { data: AllData; role: Role; re
   const [receipt, setReceipt] = useState<any>(null)
   const [returnSale, setReturnSale] = useState('')
   const [returnQty, setReturnQty] = useState(1)
-  const filtered = data.products.filter(p => Number(p.quantity) > 0 && (!cat || p.category_id === cat) && [p.name, p.sku, p.barcode ?? ''].join(' ').toLowerCase().includes(q.toLowerCase()))
+  const filtered = data.products.filter(p => p.status !== 'inactive' && Number(p.quantity) > 0 && (!cat || p.category_id === cat) && [p.name, p.sku, p.barcode ?? '', p.brand ?? '', ((p as any).compatible_models ?? []).join(' ')].join(' ').toLowerCase().includes(q.toLowerCase()))
   const subtotal = cart.reduce((s, l) => s + l.qty * l.price - l.lineDiscount, 0)
   const total = Math.max(0, subtotal - discount)
   const addToCart = (p: any) => {
