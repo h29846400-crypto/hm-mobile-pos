@@ -43,7 +43,8 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
   const salePrice = cost ? Math.round(Number(cost) * (1 + Number(profit || 0) / 100) * 100) / 100 : 0
   const searchable = (p: any) => [p.name, p.sku, p.barcode ?? '', p.brand ?? '', ((p as any).compatible_models ?? []).join(' ')].join(' ').toLowerCase()
   const filtered = data.products.filter(p => p.status !== 'inactive' && searchable(p).includes(q.toLowerCase()))
-  const totalValue = data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)
+  const activeProducts = data.products.filter(p => p.status !== 'inactive')
+  const totalValue = activeProducts.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMsg('')
     try { const r = await addStock({ name, sku: sku || undefined, categoryId: cat || null, qty: Number(qty), cost: Number(cost), profitPercent: Number(profit) }); setMsg(`Saved — sale price ${fmt(r.salePrice)} (cost + ${profit}%).`); setName(''); setSku(''); setCost(''); setQty('1'); await refresh() }
@@ -77,8 +78,8 @@ export function StockPage({ data, role, refresh }: { data: AllData; role: Role; 
     <div className="space-y-4">
       <div className="grid grid-cols-3 gap-3">
         <div className={cardCls}><div className="text-xs text-gray-500">Stock Value (sale price)</div><div className="text-lg font-bold">{fmt(totalValue)}</div></div>
-        <div className={cardCls}><div className="text-xs text-gray-500">Low Stock</div><div className="text-lg font-bold">{data.products.filter(p => Number(p.quantity) <= Number(p.min_stock) && Number(p.quantity) > 0).length}</div></div>
-        <div className={cardCls}><div className="text-xs text-gray-500">Out of Stock</div><div className="text-lg font-bold">{data.products.filter(p => Number(p.quantity) <= 0).length}</div></div>
+        <div className={cardCls}><div className="text-xs text-gray-500">Low Stock</div><div className="text-lg font-bold">{activeProducts.filter(p => Number(p.quantity) <= Number(p.min_stock) && Number(p.quantity) > 0).length}</div></div>
+        <div className={cardCls}><div className="text-xs text-gray-500">Out of Stock</div><div className="text-lg font-bold">{activeProducts.filter(p => Number(p.quantity) <= 0).length}</div></div>
       </div>
       <form onSubmit={submit} className={`${cardCls} space-y-2`}>
         <div className="font-semibold">Add Stock — cost + profit % auto-calculates sale price (cost is only visible here, never in lists)</div>
@@ -334,7 +335,7 @@ export function RepairsPage({ data, role, refresh }: { data: AllData; role: Role
           <label className="text-sm">Warranty days<input type="number" min="0" className={inputCls} value={warranty} onChange={e => setWarranty(Number(e.target.value))} /></label>
         </div>
         <div className="flex gap-2">
-          <select className={inputCls + ' flex-1'} value={partId} onChange={e => setPartId(e.target.value)}><option value="">Part from stock…</option>{data.products.filter(p => Number(p.quantity) > 0).map(p => <option key={p.id} value={p.id}>{p.name} · {fmt(p.selling_price)} · Qty {Number(p.quantity)}</option>)}</select>
+          <select className={inputCls + ' flex-1'} value={partId} onChange={e => setPartId(e.target.value)}><option value="">Part from stock…</option>{data.products.filter(p => p.status !== 'inactive' && Number(p.quantity) > 0).map(p => <option key={p.id} value={p.id}>{p.name} · {fmt(p.selling_price)} · Qty {Number(p.quantity)}</option>)}</select>
           <input type="number" min="1" className="border rounded-lg px-3 py-2 w-20 bg-white dark:bg-gray-800" value={partQty} onChange={e => setPartQty(Number(e.target.value))} />
           <button type="button" onClick={() => { const p = data.products.find(x => x.id === partId); if (p) { setParts([...parts, { product: p, qty: partQty }]); setPartId('') } }} className="border rounded-lg px-3 py-2 bg-white dark:bg-gray-800">+ Part</button>
         </div>
@@ -476,7 +477,7 @@ export function ReportsPage({ data }: { data: AllData; role: Role; refresh: () =
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[['Total Sales', salesTotal], ['Total Purchases', purchTotal], ['Total Expenses', expTotal], ['Gross Profit (sales − COGS)', salesTotal - cogs], ['Repair Profit', repairProfit], ['Net P&L', salesTotal - cogs - expTotal + repairProfit], ['Inventory (sale value)', data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)], ['Inventory (cost value)', data.products.reduce((s, p) => s + Number(p.quantity) * Number(p.avg_cost), 0)]].map(([l, v]) => (
+        {[['Total Sales', salesTotal], ['Total Purchases', purchTotal], ['Total Expenses', expTotal], ['Gross Profit (sales − COGS)', salesTotal - cogs], ['Repair Profit', repairProfit], ['Net P&L', salesTotal - cogs - expTotal + repairProfit], ['Inventory (sale value)', data.products.filter(p => p.status !== 'inactive').reduce((s, p) => s + Number(p.quantity) * Number(p.selling_price), 0)], ['Inventory (cost value)', data.products.filter(p => p.status !== 'inactive').reduce((s, p) => s + Number(p.quantity) * Number(p.avg_cost), 0)]].map(([l, v]) => (
           <div key={l as string} className={cardCls}><div className="text-xs text-gray-500">{l}</div><div className="text-lg font-bold">{fmt(v as number)}</div></div>
         ))}
       </div>
