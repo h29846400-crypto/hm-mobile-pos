@@ -58,6 +58,10 @@ export default function App() {
 
   useEffect(() => { if (user) refresh() }, [user])
 
+  // Dashboard always shows fresh data: re-fetch when the user opens it,
+  // so a sale made in POS (or on another device) appears without a manual reload.
+  useEffect(() => { if (user && view === 'dashboard') refresh() }, [view])
+
   const login = async (e: React.FormEvent) => {
     e.preventDefault(); setAuthError(''); setAuthBusy(true)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
